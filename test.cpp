@@ -1,4 +1,3 @@
-
 #include <thread>
 #include <mutex>
 #include <atomic>
@@ -6,16 +5,12 @@
 #include "./nvToolsExt.h"
 
 #include "test.h"
-
-
-// Just some hints on implementation
-// You could remove all of them
+#include "EffectSystem.h"
 
 static std::atomic_int globalTime;
 static std::atomic_bool workerMustExit = false;
 
-
-// some code
+static EffectSystem effectSystem(std::max(1, (int) std::thread::hardware_concurrency() - 1));
 
 void WorkerThread(void)
 {
@@ -28,9 +23,17 @@ void WorkerThread(void)
 		const int delta = time - lastTime;
 		lastTime = time;
 
+		//static int nextStats = 0;
+
 		if (delta > 0)
 		{
-			// some code
+			effectSystem.update(delta / 1000.0f, test::SCREEN_WIDTH, test::SCREEN_HEIGHT);
+
+			/*if (nextStats < time)
+			{
+				effectSystem.print_info();
+				nextStats = time + 3000;
+			}*/
 		}
 
 		static const int MIN_UPDATE_PERIOD_MS = 10;
@@ -44,43 +47,45 @@ void WorkerThread(void)
 
 void test::init(void)
 {
-	// some code
-
 	std::thread workerThread(WorkerThread);
 	workerThread.detach(); // Glut + MSVC = join hangs in atexit()
-
-	// some code
 }
 
 void test::term(void)
 {
-	// some code
-
 	workerMustExit = true;
-
-	// some code
 }
 
 void test::render(void)
 {
-	// some code
+	PrtEffectBuffer* effectBuf = effectSystem.get_render_buffer();
 
-	// for (size_t i=0; i< .... ; ++i)
-	//	platform::drawPoint(x, y, r, g, b, a);
+	//Render particles from all thread buffers
+	int threadsCount = effectBuf->efxIds.size();
 
-	// some code
+	for (int t = 0; t < threadsCount; ++t)
+	{
+		std::vector<int>* efxIds = &effectBuf->efxIds[t];
+
+		for (int efxId = 0; efxId < effectBuf->usedEfx[t]; ++efxId)
+		{
+			PrtEffect* effect = &effectBuf->efxPool[(*efxIds)[efxId]];
+
+			for (int pId = 0; pId < effect->aliveParticles; ++pId)
+			{
+				Particle* prt = &effect->particles[pId];
+				platform::drawPoint(prt->x, prt->y, 1, 1, 1, prt->alpha);
+			}
+		}
+	}
 }
 
 void test::update(int dt)
 {
-	// some code
-
 	globalTime.fetch_add(dt);
-
-	// some code
 }
 
 void test::on_click(int x, int y)
 {
-	// some code
+	effectSystem.add_effect(x, SCREEN_HEIGHT - y);
 }
